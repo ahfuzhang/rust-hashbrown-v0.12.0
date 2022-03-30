@@ -1,0 +1,12 @@
+stub/**/*_mock.go
+.idea/
+/vendor
+**/polaris
+/polaris
+cover.out
+coverage.html
+test.out
+*.log
+*.exe
+bin/
+*.zip

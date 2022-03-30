@@ -22,7 +22,7 @@ pub struct Group(x86::__m128i);
 #[allow(clippy::use_self)]
 impl Group {
     /// Number of bytes in the group.
-    pub const WIDTH: usize = mem::size_of::<Self>();
+    pub const WIDTH: usize = mem::size_of::<Self>();  //这个值应该等于16
 
     /// Returns a full group of empty bytes, suitable for use as the initial
     /// value for an empty hash table.
