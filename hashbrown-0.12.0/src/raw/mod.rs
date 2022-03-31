@@ -108,10 +108,10 @@ impl Fallibility {
 }
 
 /// Control byte value for an empty bucket.
-const EMPTY: u8 = 0b1111_1111;
+const EMPTY: u8 = 0b1111_1111;   //表示节点未被占用
 
 /// Control byte value for a deleted bucket.
-const DELETED: u8 = 0b1000_0000;
+const DELETED: u8 = 0b1000_0000;  //表示控制字段对应的slot被删除
 
 /// Checks whether a control byte represents a full bucket (top bit is clear).
 #[inline]

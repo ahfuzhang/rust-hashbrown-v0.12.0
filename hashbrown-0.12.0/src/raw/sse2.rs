@@ -1,4 +1,4 @@
-use super::bitmask::BitMask;
+use super::bitmask::BitMask;  // super指上级目录
 use super::EMPTY;
 use core::mem;
 
@@ -7,7 +7,7 @@ use core::arch::x86;
 #[cfg(target_arch = "x86_64")]
 use core::arch::x86_64 as x86;
 
-pub type BitMaskWord = u16;
+pub type BitMaskWord = u16;   // SIMD计算掩码后的结果，用一个16位的类型来存放
 pub const BITMASK_STRIDE: usize = 1;
 pub const BITMASK_MASK: BitMaskWord = 0xffff;
 
@@ -16,7 +16,7 @@ pub const BITMASK_MASK: BitMaskWord = 0xffff;
 ///
 /// This implementation uses a 128-bit SSE value.
 #[derive(Copy, Clone)]
-pub struct Group(x86::__m128i);
+pub struct Group(x86::__m128i);  //128位的值为一个Group，包含了16个控制字节
 
 // FIXME: https://github.com/rust-lang/rust-clippy/issues/3859
 #[allow(clippy::use_self)]
