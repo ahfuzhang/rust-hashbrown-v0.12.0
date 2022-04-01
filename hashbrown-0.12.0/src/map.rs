@@ -186,7 +186,7 @@ pub enum DefaultHashBuilder {}
 /// // use the values stored in map
 /// ```
 pub struct HashMap<K, V, S = DefaultHashBuilder, A: Allocator + Clone = Global> {
-    pub(crate) hash_builder: S,
+    pub(crate) hash_builder: S,  //用来计算hash函数的对象
     pub(crate) table: RawTable<(K, V), A>,  //数据部分
 }
 
@@ -219,7 +219,7 @@ where
 }
 
 /// Ensures that a single closure type across uses of this which, in turn prevents multiple
-/// instances of any functions like RawTable::reserve from being generated
+/// instances of any functions like RawTable::reserve from being generated  //看不懂这个key比较函数是怎么实现的
 #[cfg_attr(feature = "inline-more", inline)]
 fn equivalent_key<Q, K, V>(k: &Q) -> impl Fn(&(K, V)) -> bool + '_
 where
@@ -1508,7 +1508,7 @@ where
             self.table
                 .insert(hash, (k, v), make_hasher::<K, _, V, S>(&self.hash_builder));
             None
-        }
+        }  //   (k, v)  这里会不会导致频繁的数据拷贝？？？
     }
 
     /// Insert a key-value pair into the map without checking

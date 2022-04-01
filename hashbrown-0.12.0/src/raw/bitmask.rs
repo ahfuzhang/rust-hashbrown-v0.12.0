@@ -49,12 +49,12 @@ impl BitMask {
     #[inline]
     pub fn any_bit_set(self) -> bool {
         self.0 != 0
-    }
+    }  //是否任意为不为0
 
     /// Returns the first set bit in the `BitMask`, if there is one.
     #[inline]
     pub fn lowest_set_bit(self) -> Option<usize> {
-        if self.0 == 0 {
+        if self.0 == 0 {  //全都为0， 没找到
             None
         } else {
             Some(unsafe { self.lowest_set_bit_nonzero() })
@@ -96,7 +96,7 @@ impl BitMask {
     }
 }
 
-impl IntoIterator for BitMask {
+impl IntoIterator for BitMask {  //实现接口
     type Item = usize;
     type IntoIter = BitMaskIter;
 

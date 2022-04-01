@@ -82,18 +82,18 @@ impl Group {
             clippy::cast_sign_loss,
             clippy::cast_possible_truncation
         )]
-        unsafe {
+        unsafe {  //https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_cmpeq_epi8&ig_expand=908
             let cmp = x86::_mm_cmpeq_epi8(self.0, x86::_mm_set1_epi8(byte as i8));
-            BitMask(x86::_mm_movemask_epi8(cmp) as u16)
+            BitMask(x86::_mm_movemask_epi8(cmp) as u16)  //https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_movemask_epi8&ig_expand=908,4869
         }
-    }
-
+    }  // _mm_set1_epi8 比较16个字节
+       // _mm_movemask_epi8 16字节压缩为16bit
     /// Returns a `BitMask` indicating all bytes in the group which are
     /// `EMPTY`.
     #[inline]
     pub fn match_empty(self) -> BitMask {
         self.match_byte(EMPTY)
-    }
+    }  //查一下是不是全部为空
 
     /// Returns a `BitMask` indicating all bytes in the group which are
     /// `EMPTY` or `DELETED`.

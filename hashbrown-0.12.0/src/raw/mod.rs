@@ -87,7 +87,7 @@ enum Fallibility {
     Infallible,
 }
 
-impl Fallibility {
+impl Fallibility {  //enum类型上也能写方法，这是rust的特殊之处
     /// Error to return on capacity overflow.
     #[cfg_attr(feature = "inline-more", inline)]
     fn capacity_overflow(self) -> TryReserveError {
@@ -115,19 +115,19 @@ const DELETED: u8 = 0b1000_0000;  //表示控制字段对应的slot被删除
 
 /// Checks whether a control byte represents a full bucket (top bit is clear).
 #[inline]
-fn is_full(ctrl: u8) -> bool {
+fn is_full(ctrl: u8) -> bool {  //最高位为0，表示被占用
     ctrl & 0x80 == 0
 }
 
 /// Checks whether a control byte represents a special value (top bit is set).
 #[inline]
 fn is_special(ctrl: u8) -> bool {
-    ctrl & 0x80 != 0
+    ctrl & 0x80 != 0  //最高位为1，表示空或者被删除
 }
 
 /// Checks whether a special control value is EMPTY (just check 1 bit).
 #[inline]
-fn special_is_empty(ctrl: u8) -> bool {
+fn special_is_empty(ctrl: u8) -> bool {  //??? 检查最低位的意义是什么
     debug_assert!(is_special(ctrl));
     ctrl & 0x01 != 0
 }
@@ -135,7 +135,7 @@ fn special_is_empty(ctrl: u8) -> bool {
 /// Primary hash function, used to select the initial bucket to probe from.
 #[inline]
 #[allow(clippy::cast_possible_truncation)]
-fn h1(hash: u64) -> usize {
+fn h1(hash: u64) -> usize {   //??? 为什么对高位和低位没截取？？？
     // On 32-bit platforms we simply ignore the higher hash bits.
     hash as usize
 }
@@ -143,11 +143,11 @@ fn h1(hash: u64) -> usize {
 /// Secondary hash function, saved in the low 7 bits of the control byte.
 #[inline]
 #[allow(clippy::cast_possible_truncation)]
-fn h2(hash: u64) -> u8 {
+fn h2(hash: u64) -> u8 {  // 取hashcode的高7位
     // Grab the top 7 bits of the hash. While the hash is normally a full 64-bit
     // value, some hash functions (such as FxHash) produce a usize result
     // instead, which means that the top 32 bits are 0 on 32-bit platforms.
-    let hash_len = usize::min(mem::size_of::<usize>(), mem::size_of::<u64>());
+    let hash_len = usize::min(mem::size_of::<usize>(), mem::size_of::<u64>());  //x64下面肯定是8
     let top7 = hash >> (hash_len * 8 - 7);
     (top7 & 0x7f) as u8 // truncation
 }
@@ -161,9 +161,9 @@ fn h2(hash: u64) -> u8 {
 ///
 /// Proof that the probe will visit every group in the table:
 /// <https://fgiesen.wordpress.com/2015/02/22/triangular-numbers-mod-2n/>
-struct ProbeSeq {
-    pos: usize,
-    stride: usize,
+struct ProbeSeq { //三角数,   (k*(k+1))/2,  才是是用于在group之间跳跃
+    pos: usize,  // 取hashcode的低N位, 本质上就是桶长度取模
+    stride: usize,  //每次加16，看起来是跳跃的累计数
 }
 
 impl ProbeSeq {
@@ -175,9 +175,9 @@ impl ProbeSeq {
             "Went past end of probe sequence"
         );
 
-        self.stride += Group::WIDTH;
+        self.stride += Group::WIDTH;  // Group::WIDTH是Group类的WIDTH静态成员,等于16
         self.pos += self.stride;
-        self.pos &= bucket_mask;
+        self.pos &= bucket_mask;  //这个操作是防止溢出桶的范围
     }
 }
 
@@ -188,12 +188,12 @@ impl ProbeSeq {
 // Workaround for emscripten bug emscripten-core/emscripten-fastcomp#258
 #[cfg_attr(target_os = "emscripten", inline(never))]
 #[cfg_attr(not(target_os = "emscripten"), inline)]
-fn capacity_to_buckets(cap: usize) -> Option<usize> {
+fn capacity_to_buckets(cap: usize) -> Option<usize> {  //cap这个值向上对齐
     debug_assert_ne!(cap, 0);
 
     // For small tables we require at least 1 empty bucket so that lookups are
     // guaranteed to terminate if an element doesn't exist in the table.
-    if cap < 8 {
+    if cap < 8 {  //最小容量为4或者8
         // We don't bother with a table size of 2 buckets since that can only
         // hold a single element. Instead we skip directly to a 4 bucket table
         // which can hold 3 elements.
@@ -204,18 +204,18 @@ fn capacity_to_buckets(cap: usize) -> Option<usize> {
     //
     // Be careful when modifying this, calculate_layout relies on the
     // overflow check here.
-    let adjusted_cap = cap.checked_mul(8)? / 7;
-
+    let adjusted_cap = cap.checked_mul(8)? / 7;  //??? 看不懂
+         // cap.checked_mul(8) 检查这个数据乘以8，会不会产生溢出。真的好严谨啊
     // Any overflows will have been caught by the checked_mul. Also, any
     // rounding errors from the division above will be cleaned up by
     // next_power_of_two (which can't overflow because of the previous division).
-    Some(adjusted_cap.next_power_of_two())
+    Some(adjusted_cap.next_power_of_two())  //向上取一个与2的幂对齐的值
 }
 
 /// Returns the maximum effective capacity for the given bucket mask, taking
 /// the maximum load factor into account.
 #[inline]
-fn bucket_mask_to_capacity(bucket_mask: usize) -> usize {
+fn bucket_mask_to_capacity(bucket_mask: usize) -> usize {  //??? 没看懂
     if bucket_mask < 8 {
         // For tables with 1/2/4/8 buckets, we always reserve one empty slot.
         // Keep in mind that the bucket mask is one less than the bucket count.
@@ -229,15 +229,15 @@ fn bucket_mask_to_capacity(bucket_mask: usize) -> usize {
 /// Helper which allows the max calculation for ctrl_align to be statically computed for each T
 /// while keeping the rest of `calculate_layout_for` independent of `T`
 #[derive(Copy, Clone)]
-struct TableLayout {
+struct TableLayout {  //??? 这个结构是要干啥?
     size: usize,
     ctrl_align: usize,
-}
+}  //允许为每个 T 静态计算 ctrl_align 的最大计算的助手, 同时保持 `calculate_layout_for` 的其余部分独立于 `T`
 
 impl TableLayout {
     #[inline]
     fn new<T>() -> Self {
-        let layout = Layout::new::<T>();
+        let layout = Layout::new::<T>();  //??? Layout哪儿来的?
         Self {
             size: layout.size(),
             ctrl_align: usize::max(layout.align(), Group::WIDTH),
@@ -276,7 +276,7 @@ fn calculate_layout<T>(buckets: usize) -> Option<(Layout, usize)> {
 /// This is usually just a pointer to the element itself. However if the element
 /// is a ZST, then we instead track the index of the element in the table so
 /// that `erase` works properly.
-pub struct Bucket<T> {
+pub struct Bucket<T> {  //感觉是对具体的某个slot的封装
     // Actually it is pointer to next element than element itself
     // this is needed to maintain pointer arithmetic invariants
     // keeping direct pointer to element introduces difficulty.
@@ -291,18 +291,18 @@ unsafe impl<T> Send for Bucket<T> {}
 impl<T> Clone for Bucket<T> {
     #[inline]
     fn clone(&self) -> Self {
-        Self { ptr: self.ptr }
+        Self { ptr: self.ptr }  //如果发生拷贝，只拷贝指针
     }
 }
 
 impl<T> Bucket<T> {
-    #[inline]
+    #[inline]  //??? 为什么是静态方法
     unsafe fn from_base_index(base: NonNull<T>, index: usize) -> Self {
-        let ptr = if mem::size_of::<T>() == 0 {
+        let ptr = if mem::size_of::<T>() == 0 { //??? T怎么可能为0呢，不懂
             // won't overflow because index must be less than length
-            (index + 1) as *mut T
+            (index + 1) as *mut T   //???
         } else {
-            base.as_ptr().sub(index)
+            base.as_ptr().sub(index)  //用数组的结束指针，倒着减就得到了下标
         };
         Self {
             ptr: NonNull::new_unchecked(ptr),
@@ -372,23 +372,23 @@ pub struct RawTable<T, A: Allocator + Clone = Global> {
 
 /// Non-generic part of `RawTable` which allows functions to be instantiated only once regardless
 /// of how many different key-value types are used.
-struct RawTableInner<A> {
+struct RawTableInner<A> {  //看起来是内部最核心的实现
     // Mask to get an index from a hash value. The value is one less than the
     // number of buckets in the table.
-    bucket_mask: usize,
-
+    bucket_mask: usize,  //猜测是桶长度，可是为什么叫mask
+        //  bucket_mask+1等于真实的桶长度
     // [Padding], T1, T2, ..., Tlast, C1, C2, ...
     //                                ^ points here
-    ctrl: NonNull<u8>,
-
+    ctrl: NonNull<u8>,  // ctrl byte的数组
+        // ctrl指针，就是buckets部分的结束指针。这样就省了一个word去保存buckets指针
     // Number of elements that can be inserted before we need to grow the table
-    growth_left: usize,
+    growth_left: usize,  //在增长之前，还能插入多少数据
 
     // Number of elements in the table, only really used by len()
-    items: usize,
+    items: usize,  //真实的元素个数
 
-    alloc: A,
-}
+    alloc: A,  //分配器
+}  //??? data部分在哪里
 
 impl<T> RawTable<T, Global> {
     /// Creates a new empty hash table without allocating any memory.
@@ -504,14 +504,14 @@ impl<T, A: Allocator + Clone> RawTable<T, A> {
 
     /// Returns pointer to one past last element of data table.
     #[inline]
-    pub unsafe fn data_end(&self) -> NonNull<T> {
+    pub unsafe fn data_end(&self) -> NonNull<T> {  //控制byte的开始位置，就是数据桶的结束位置???
         NonNull::new_unchecked(self.table.ctrl.as_ptr().cast())
-    }
-
+    }  //这个方法绝了！ ctrl指针，减去整个桶的长度，就得到了数据部分的起始指针.
+          // bucket指针，这么一个字段都要省，真狠
     /// Returns pointer to start of data table.
     #[inline]
     #[cfg(feature = "nightly")]
-    pub unsafe fn data_start(&self) -> *mut T {
+    pub unsafe fn data_start(&self) -> *mut T {  //桶的开始位置
         self.data_end().as_ptr().wrapping_sub(self.buckets())
     }
 
@@ -523,7 +523,7 @@ impl<T, A: Allocator + Clone> RawTable<T, A> {
 
     /// Returns a pointer to an element in the table.
     #[inline]
-    pub unsafe fn bucket(&self, index: usize) -> Bucket<T> {
+    pub unsafe fn bucket(&self, index: usize) -> Bucket<T> {  //根据下标，返回当前slot的内容
         debug_assert_ne!(self.table.bucket_mask, 0);
         debug_assert!(index < self.buckets());
         Bucket::from_base_index(self.data_end(), index)
@@ -727,7 +727,7 @@ impl<T, A: Allocator + Clone> RawTable<T, A> {
             // factor if we are replacing a tombstone. This works since the
             // number of EMPTY slots does not change in this case.
             let old_ctrl = *self.table.ctrl(index);
-            if unlikely(self.table.growth_left == 0 && special_is_empty(old_ctrl)) {
+            if unlikely(self.table.growth_left == 0 && special_is_empty(old_ctrl)) {  //如果达到了该扩容的情况，先扩容
                 self.reserve(1, hasher);
                 index = self.table.find_insert_slot(hash);
             }
@@ -1046,7 +1046,7 @@ where
 
 impl<A> RawTableInner<A> {
     #[inline]
-    const fn new_in(alloc: A) -> Self {
+    const fn new_in(alloc: A) -> Self {  //对象工厂
         Self {
             // Be careful to cast the entire slice to a raw pointer.
             ctrl: unsafe { NonNull::new_unchecked(Group::static_empty() as *const _ as *mut u8) },
@@ -1062,7 +1062,7 @@ impl<A: Allocator + Clone> RawTableInner<A> {
     #[cfg_attr(feature = "inline-more", inline)]
     unsafe fn new_uninitialized(
         alloc: A,
-        table_layout: TableLayout,
+        table_layout: TableLayout,  // TableLayout 类用于计算 buckets和group的分布
         buckets: usize,
         fallibility: Fallibility,
     ) -> Result<Self, TryReserveError> {
@@ -1072,7 +1072,7 @@ impl<A: Allocator + Clone> RawTableInner<A> {
         let (layout, ctrl_offset) = match table_layout.calculate_layout_for(buckets) {
             Some(lco) => lco,
             None => return Err(fallibility.capacity_overflow()),
-        };
+        };  //  ctrl_offset 是整个buckets的字节数
 
         // We need an additional check to ensure that the allocation doesn't
         // exceed `isize::MAX`. We can skip this check on 64-bit systems since
@@ -1083,7 +1083,7 @@ impl<A: Allocator + Clone> RawTableInner<A> {
             return Err(fallibility.capacity_overflow());
         }
 
-        let ptr: NonNull<u8> = match do_alloc(&alloc, layout) {
+        let ptr: NonNull<u8> = match do_alloc(&alloc, layout) {  //layout看起来是需要的内存数
             Ok(block) => block.cast(),
             Err(_) => return Err(fallibility.alloc_err(layout)),
         };
@@ -1173,25 +1173,25 @@ impl<A: Allocator + Clone> RawTableInner<A> {
     /// code generated, but it is eliminated by LLVM optimizations.
     #[inline]
     fn find_inner(&self, hash: u64, eq: &mut dyn FnMut(usize) -> bool) -> Option<usize> {
-        let h2_hash = h2(hash);
-        let mut probe_seq = self.probe_seq(hash);
+        let h2_hash = h2(hash);  //返回高7位
+        let mut probe_seq = self.probe_seq(hash);  //返回 ProbeSeq 对象，类似一个迭代器
 
         loop {
             let group = unsafe { Group::load(self.ctrl(probe_seq.pos)) };
 
-            for bit in group.match_byte(h2_hash) {
-                let index = (probe_seq.pos + bit) & self.bucket_mask;
+            for bit in group.match_byte(h2_hash) {  //BitMaskIter对象的next()方法
+                let index = (probe_seq.pos + bit) & self.bucket_mask;  //得到控制数组中的下标
 
-                if likely(eq(index)) {
+                if likely(eq(index)) {  //执行用于KEY比较的回调函数
                     return Some(index);
                 }
             }
 
-            if likely(group.match_empty().any_bit_set()) {
+            if likely(group.match_empty().any_bit_set()) {  //如果整个group都为空，则数据肯定不存在
                 return None;
             }
 
-            probe_seq.move_next(self.bucket_mask);
+            probe_seq.move_next(self.bucket_mask);  //当前group找不到，换到下一个group去找
         }
     }
 
@@ -1246,8 +1246,8 @@ impl<A: Allocator + Clone> RawTableInner<A> {
     #[inline]
     fn probe_seq(&self, hash: u64) -> ProbeSeq {
         ProbeSeq {
-            pos: h1(hash) & self.bucket_mask,
-            stride: 0,
+            pos: h1(hash) & self.bucket_mask,  //假设桶长度是1024，则POST取hashcode的低10位
+            stride: 0,                         // pos 字段也就等于桶的下标了
         }
     }
 
@@ -1268,9 +1268,9 @@ impl<A: Allocator + Clone> RawTableInner<A> {
 
     #[inline]
     unsafe fn record_item_insert_at(&mut self, index: usize, old_ctrl: u8, hash: u64) {
-        self.growth_left -= special_is_empty(old_ctrl) as usize;
-        self.set_ctrl_h2(index, hash);
-        self.items += 1;
+        self.growth_left -= special_is_empty(old_ctrl) as usize;  //修改剩余空间
+        self.set_ctrl_h2(index, hash);  //修改控制位
+        self.items += 1;  //总元素+1
     }
 
     #[inline]
@@ -1319,8 +1319,8 @@ impl<A: Allocator + Clone> RawTableInner<A> {
         // ---------------------------------------------
         let index2 = ((index.wrapping_sub(Group::WIDTH)) & self.bucket_mask) + Group::WIDTH;
 
-        *self.ctrl(index) = ctrl;
-        *self.ctrl(index2) = ctrl;
+        *self.ctrl(index) = ctrl;  //对应下标，写入hashcode的高7位
+        *self.ctrl(index2) = ctrl;  //??? 这个是要干啥
     }
 
     /// Returns a pointer to a control byte.

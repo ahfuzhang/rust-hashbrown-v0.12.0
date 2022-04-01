@@ -40,7 +40,7 @@ mod inner {
     }
 
     #[derive(Copy, Clone)]
-    pub struct Global;
+    pub struct Global;  //声明一个空结构体
     unsafe impl Allocator for Global {
         #[inline]
         fn allocate(&self, layout: Layout) -> Result<NonNull<u8>, ()> {
