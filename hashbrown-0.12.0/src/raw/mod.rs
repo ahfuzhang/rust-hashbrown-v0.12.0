@@ -129,7 +129,7 @@ fn is_special(ctrl: u8) -> bool {
 #[inline]
 fn special_is_empty(ctrl: u8) -> bool {  //??? 检查最低位的意义是什么
     debug_assert!(is_special(ctrl));
-    ctrl & 0x01 != 0
+    ctrl & 0x01 != 0   //猜测这个是所谓的墓碑
 }
 
 /// Primary hash function, used to select the initial bucket to probe from.
@@ -215,14 +215,14 @@ fn capacity_to_buckets(cap: usize) -> Option<usize> {  //cap这个值向上对�
 /// Returns the maximum effective capacity for the given bucket mask, taking
 /// the maximum load factor into account.
 #[inline]
-fn bucket_mask_to_capacity(bucket_mask: usize) -> usize {  //??? 没看懂
+fn bucket_mask_to_capacity(bucket_mask: usize) -> usize {  //把容量的掩码，转换成容量值
     if bucket_mask < 8 {
         // For tables with 1/2/4/8 buckets, we always reserve one empty slot.
         // Keep in mind that the bucket mask is one less than the bucket count.
         bucket_mask
     } else {
         // For larger tables we reserve 12.5% of the slots as empty.
-        ((bucket_mask + 1) / 8) * 7
+        ((bucket_mask + 1) / 8) * 7  //负载率最高 87.5%
     }
 }
 
@@ -236,7 +236,7 @@ struct TableLayout {  //??? 这个结构是要干啥?
 
 impl TableLayout {
     #[inline]
-    fn new<T>() -> Self {
+    fn new<T>() -> Self {  //T是 (K,V)， 就是一个slot的size
         let layout = Layout::new::<T>();  //??? Layout哪儿来的?
         Self {
             size: layout.size(),
@@ -644,10 +644,10 @@ impl<T, A: Allocator + Clone> RawTable<T, A> {
     }
 
     /// Ensures that at least `additional` items can be inserted into the table
-    /// without reallocation.
+    /// without reallocation.  //已经达到了负载量，并且找到了墓碑标注
     #[cfg_attr(feature = "inline-more", inline)]
     pub fn reserve(&mut self, additional: usize, hasher: impl Fn(&T) -> u64) {
-        if additional > self.table.growth_left {
+        if additional > self.table.growth_left {  //additional一般是1
             // Avoid `Result::unwrap_or_else` because it bloats LLVM IR.
             if self
                 .reserve_rehash(additional, hasher, Fallibility::Infallible)
@@ -684,11 +684,11 @@ impl<T, A: Allocator + Clone> RawTable<T, A> {
     ) -> Result<(), TryReserveError> {
         unsafe {
             self.table.reserve_rehash_inner(
-                additional,
+                additional,  // 1
                 &|table, index| hasher(table.bucket::<T>(index).as_ref()),
                 fallibility,
-                TableLayout::new::<T>(),
-                if mem::needs_drop::<T>() {
+                TableLayout::new::<T>(),  //得到sizeof字段的值
+                if mem::needs_drop::<T>() {  //???这是个啥
                     Some(mem::transmute(ptr::drop_in_place::<T> as unsafe fn(*mut T)))
                 } else {
                     None
@@ -726,9 +726,9 @@ impl<T, A: Allocator + Clone> RawTable<T, A> {
             // We can avoid growing the table once we have reached our load
             // factor if we are replacing a tombstone. This works since the
             // number of EMPTY slots does not change in this case.
-            let old_ctrl = *self.table.ctrl(index);
+            let old_ctrl = *self.table.ctrl(index);   //special_is_empty 这个完全看不懂
             if unlikely(self.table.growth_left == 0 && special_is_empty(old_ctrl)) {  //如果达到了该扩容的情况，先扩容
-                self.reserve(1, hasher);
+                self.reserve(1, hasher);  //执行预留操作
                 index = self.table.find_insert_slot(hash);
             }
 
@@ -1177,7 +1177,7 @@ impl<A: Allocator + Clone> RawTableInner<A> {
         let mut probe_seq = self.probe_seq(hash);  //返回 ProbeSeq 对象，类似一个迭代器
 
         loop {
-            let group = unsafe { Group::load(self.ctrl(probe_seq.pos)) };
+            let group = unsafe { Group::load(self.ctrl(probe_seq.pos)) };  //读取一个Group
 
             for bit in group.match_byte(h2_hash) {  //BitMaskIter对象的next()方法
                 let index = (probe_seq.pos + bit) & self.bucket_mask;  //得到控制数组中的下标
@@ -1196,13 +1196,13 @@ impl<A: Allocator + Clone> RawTableInner<A> {
     }
 
     #[allow(clippy::mut_mut)]
-    #[inline]
+    #[inline]  //批量的把删除标记改为空的标记，把FULL的标记改成删除的标记
     unsafe fn prepare_rehash_in_place(&mut self) {
         // Bulk convert all full control bytes to DELETED, and all DELETED
         // control bytes to EMPTY. This effectively frees up all buckets
         // containing a DELETED entry.
-        for i in (0..self.buckets()).step_by(Group::WIDTH) {
-            let group = Group::load_aligned(self.ctrl(i));
+        for i in (0..self.buckets()).step_by(Group::WIDTH) {  //遍历所有group
+            let group = Group::load_aligned(self.ctrl(i));  //以对齐的方式来加载
             let group = group.convert_special_to_empty_and_full_to_deleted();
             group.store_aligned(self.ctrl(i));
         }
@@ -1225,13 +1225,13 @@ impl<A: Allocator + Clone> RawTableInner<A> {
         Bucket::from_base_index(self.data_end(), index)
     }
 
-    #[inline]
+    #[inline]  //在不扩容rehash的时候调用, size_of是一个slot的size
     unsafe fn bucket_ptr(&self, index: usize, size_of: usize) -> *mut u8 {
         debug_assert_ne!(self.bucket_mask, 0);
         debug_assert!(index < self.buckets());
         let base: *mut u8 = self.data_end().as_ptr();
-        base.sub((index + 1) * size_of)
-    }
+        base.sub((index + 1) * size_of)  //指向slot对应index的结束位置
+    }  //??? 为什么这里没考虑 pad 信息的长度?---  因为padding放在了最头部
 
     #[inline]
     unsafe fn data_end<T>(&self) -> NonNull<T> {
@@ -1273,7 +1273,7 @@ impl<A: Allocator + Clone> RawTableInner<A> {
         self.items += 1;  //总元素+1
     }
 
-    #[inline]
+    #[inline]  //rehash的时候，判断新旧位置是否在同一个Group中
     fn is_in_same_group(&self, i: usize, new_i: usize, hash: u64) -> bool {
         let probe_seq_pos = self.probe_seq(hash).pos;
         let probe_index =
@@ -1283,21 +1283,21 @@ impl<A: Allocator + Clone> RawTableInner<A> {
 
     /// Sets a control byte to the hash, and possibly also the replicated control byte at
     /// the end of the array.
-    #[inline]
+    #[inline]  //rehash的时候，当不需要迁移新旧位置的情况
     unsafe fn set_ctrl_h2(&self, index: usize, hash: u64) {
-        self.set_ctrl(index, h2(hash));
+        self.set_ctrl(index, h2(hash));  //写ctrl byte
     }
 
-    #[inline]
+    #[inline]  //rehash过程中，把旧位置的数据移动到新位置
     unsafe fn replace_ctrl_h2(&self, index: usize, hash: u64) -> u8 {
         let prev_ctrl = *self.ctrl(index);
-        self.set_ctrl_h2(index, hash);
+        self.set_ctrl_h2(index, hash);  //写新值，返回旧值
         prev_ctrl
     }
 
     /// Sets a control byte, and possibly also the replicated control byte at
     /// the end of the array.
-    #[inline]
+    #[inline]  //写某个桶的ctrl byte
     unsafe fn set_ctrl(&self, index: usize, ctrl: u8) {
         // Replicate the first Group::WIDTH control bytes at the end of
         // the array without using a branch:
@@ -1318,11 +1318,11 @@ impl<A: Allocator + Clone> RawTableInner<A> {
         // | [A] | [B] | [EMPTY] | [EMPTY] | [A] | [B] |
         // ---------------------------------------------
         let index2 = ((index.wrapping_sub(Group::WIDTH)) & self.bucket_mask) + Group::WIDTH;
-
+          //wrapping_sub是防止溢出的减法，减去一个Group的长度（16字节）
         *self.ctrl(index) = ctrl;  //对应下标，写入hashcode的高7位
-        *self.ctrl(index2) = ctrl;  //??? 这个是要干啥
-    }
-
+        *self.ctrl(index2) = ctrl;  //一般情况下, index和index2相等
+    }  //如果index<16，则index2出现在ctrl byte数组的末位
+         //难道是为了处理桶长度小于16的情况??
     /// Returns a pointer to a control byte.
     #[inline]
     unsafe fn ctrl(&self, index: usize) -> *mut u8 {
@@ -1384,7 +1384,7 @@ impl<A: Allocator + Clone> RawTableInner<A> {
     /// code generated, but it is eliminated by LLVM optimizations when inlined.
     #[allow(clippy::inline_always)]
     #[inline(always)]
-    unsafe fn reserve_rehash_inner(
+    unsafe fn reserve_rehash_inner(  //负载满，且找到墓碑的时候，调用此函数
         &mut self,
         additional: usize,
         hasher: &dyn Fn(&mut Self, usize) -> u64,
@@ -1395,13 +1395,13 @@ impl<A: Allocator + Clone> RawTableInner<A> {
         // Avoid `Option::ok_or_else` because it bloats LLVM IR.
         let new_items = match self.items.checked_add(additional) {
             Some(new_items) => new_items,
-            None => return Err(fallibility.capacity_overflow()),
-        };
-        let full_capacity = bucket_mask_to_capacity(self.bucket_mask);
-        if new_items <= full_capacity / 2 {
+            None => return Err(fallibility.capacity_overflow()),  //检查会不会溢出
+        };  //元素个数加1 ，如此简单的需求，写得如此严谨
+        let full_capacity = bucket_mask_to_capacity(self.bucket_mask);  //计算允许的最大容量
+        if new_items <= full_capacity / 2 {  //不到最大容量的一半
             // Rehash in-place without re-allocating if we have plenty of spare
             // capacity that is locked up due to DELETED entries.
-            self.rehash_in_place(hasher, layout.size, drop);
+            self.rehash_in_place(hasher, layout.size, drop);  //当删除大量元素后，进行rehash
             Ok(())
         } else {
             // Otherwise, conservatively resize to at least the next size up
@@ -1475,7 +1475,7 @@ impl<A: Allocator + Clone> RawTableInner<A> {
     unsafe fn rehash_in_place(
         &mut self,
         hasher: &dyn Fn(&mut Self, usize) -> u64,
-        size_of: usize,
+        size_of: usize,  //猜测是一个SLOT的字节数
         drop: Option<fn(*mut u8)>,
     ) {
         // If the hash function panics then properly clean up any elements
@@ -1484,9 +1484,9 @@ impl<A: Allocator + Clone> RawTableInner<A> {
         // without risking another panic.
         self.prepare_rehash_in_place();
 
-        let mut guard = guard(self, move |self_| {
-            if let Some(drop) = drop {
-                for i in 0..self_.buckets() {
+        let mut guard = guard(self, move |self_| {  //猜测是为了转移所有权
+            if let Some(drop) = drop {//如果函数指针drop有效
+                for i in 0..self_.buckets() {  //遍历所有控制字节
                     if *self_.ctrl(i) == DELETED {
                         self_.set_ctrl(i, EMPTY);
                         drop(self_.bucket_ptr(i, size_of));
@@ -1500,47 +1500,47 @@ impl<A: Allocator + Clone> RawTableInner<A> {
         // At this point, DELETED elements are elements that we haven't
         // rehashed yet. Find them and re-insert them at their ideal
         // position.
-        'outer: for i in 0..guard.buckets() {
+        'outer: for i in 0..guard.buckets() {//遍历控制字段
             if *guard.ctrl(i) != DELETED {
                 continue;
             }
 
-            let i_p = guard.bucket_ptr(i, size_of);
-
+            let i_p = guard.bucket_ptr(i, size_of);  //相当于调用 RawTableInner::bucket_ptr
+                  //记录旧的位置
             'inner: loop {
                 // Hash the current item
-                let hash = hasher(*guard, i);
+                let hash = hasher(*guard, i);  //重新计算hash值
 
                 // Search for a suitable place to put it
-                let new_i = guard.find_insert_slot(hash);
+                let new_i = guard.find_insert_slot(hash);  //在一个假定是空的位置，重新寻找新的插入点
                 let new_i_p = guard.bucket_ptr(new_i, size_of);
-
+                   //得到新位置
                 // Probing works by scanning through all of the control
                 // bytes in groups, which may not be aligned to the group
                 // size. If both the new and old position fall within the
                 // same unaligned group, then there is no benefit in moving
                 // it and we can just continue to the next item.
                 if likely(guard.is_in_same_group(i, new_i, hash)) {
-                    guard.set_ctrl_h2(i, hash);
+                    guard.set_ctrl_h2(i, hash);  //如果新位置和旧位置在一个group中，把旧位置标记为有效
                     continue 'outer;
                 }
 
                 // We are moving the current item to a new position. Write
                 // our H2 to the control byte of the new position.
-                let prev_ctrl = guard.replace_ctrl_h2(new_i, hash);
-                if prev_ctrl == EMPTY {
-                    guard.set_ctrl(i, EMPTY);
+                let prev_ctrl = guard.replace_ctrl_h2(new_i, hash);  //新的位置写入ctrl byte
+                if prev_ctrl == EMPTY {  //旧的位置本来就是空的
+                    guard.set_ctrl(i, EMPTY);  //当前位置设为空
                     // If the target slot is empty, simply move the current
                     // element into the new slot and clear the old control
                     // byte.
-                    ptr::copy_nonoverlapping(i_p, new_i_p, size_of);
+                    ptr::copy_nonoverlapping(i_p, new_i_p, size_of);  //拷贝(K,V)的内容
                     continue 'outer;
                 } else {
                     // If the target slot is occupied, swap the two elements
                     // and then continue processing the element that we just
                     // swapped into the old slot.
-                    debug_assert_eq!(prev_ctrl, DELETED);
-                    ptr::swap_nonoverlapping(i_p, new_i_p, size_of);
+                    debug_assert_eq!(prev_ctrl, DELETED);  //标记为未处理 ??? 向前移动和向后移动是不同的效果吧
+                    ptr::swap_nonoverlapping(i_p, new_i_p, size_of);  //交换两个位置的slot的内容
                     continue 'inner;
                 }
             }
@@ -1548,7 +1548,7 @@ impl<A: Allocator + Clone> RawTableInner<A> {
 
         guard.growth_left = bucket_mask_to_capacity(guard.bucket_mask) - guard.items;
 
-        mem::forget(guard);
+        mem::forget(guard);  //??? 看不懂
     }
 
     #[inline]

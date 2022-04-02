@@ -5,11 +5,11 @@ pub struct ScopeGuard<T, F>
 where
     F: FnMut(&mut T),
 {
-    dropfn: F,
-    value: T,
+    dropfn: F,  //一个闭包
+    value: T,   //值，会传入RawTableInner对象
 }
 
-#[inline]
+#[inline] //构造对象
 pub fn guard<T, F>(value: T, dropfn: F) -> ScopeGuard<T, F>
 where
     F: FnMut(&mut T),
@@ -24,7 +24,7 @@ where
     type Target = T;
     #[inline]
     fn deref(&self) -> &T {
-        &self.value
+        &self.value  //转移所有权???
     }
 }
 
@@ -44,6 +44,6 @@ where
 {
     #[inline]
     fn drop(&mut self) {
-        (self.dropfn)(&mut self.value);
+        (self.dropfn)(&mut self.value);  //执行闭包函数
     }
 }

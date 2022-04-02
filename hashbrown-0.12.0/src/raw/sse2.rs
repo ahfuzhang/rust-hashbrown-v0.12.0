@@ -121,7 +121,7 @@ impl Group {
     /// Performs the following transformation on all bytes in the group:
     /// - `EMPTY => EMPTY`
     /// - `DELETED => EMPTY`
-    /// - `FULL => DELETED`
+    /// - `FULL => DELETED`  //在不扩容状态下REHASH的时候，做这种操作
     #[inline]
     pub fn convert_special_to_empty_and_full_to_deleted(self) -> Self {
         // Map high_bit = 1 (EMPTY or DELETED) to 1111_1111
