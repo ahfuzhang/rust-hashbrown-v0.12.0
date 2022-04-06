@@ -241,7 +241,7 @@ where
 }
 
 #[cfg(not(feature = "nightly"))]
-#[cfg_attr(feature = "inline-more", inline)]
+#[cfg_attr(feature = "inline-more", inline)]  //计算hashcode的过程
 pub(crate) fn make_hash<K, Q, S>(hash_builder: &S, val: &Q) -> u64
 where
     K: Borrow<Q>,

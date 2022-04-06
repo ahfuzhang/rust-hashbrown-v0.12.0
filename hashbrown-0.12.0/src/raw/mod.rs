@@ -326,11 +326,11 @@ impl<T> Bucket<T> {
         }
     }
     #[inline]
-    unsafe fn next_n(&self, offset: usize) -> Self {
+    unsafe fn next_n(&self, offset: usize) -> Self {  //偏移到N个元素
         let ptr = if mem::size_of::<T>() == 0 {
             (self.ptr.as_ptr() as usize + offset) as *mut T
         } else {
-            self.ptr.as_ptr().sub(offset)
+            self.ptr.as_ptr().sub(offset) //我擦，data区域的数据，是倒着放的
         };
         Self {
             ptr: NonNull::new_unchecked(ptr),
@@ -377,7 +377,7 @@ struct RawTableInner<A> {  //看起来是内部最核心的实现
     // number of buckets in the table.
     bucket_mask: usize,  //猜测是桶长度，可是为什么叫mask
         //  bucket_mask+1等于真实的桶长度
-    // [Padding], T1, T2, ..., Tlast, C1, C2, ...
+    // [Padding], T1, T2, ..., Tlast, C1, C2, ...   //这里写错了，应该是Tn....T2,T1,T0
     //                                ^ points here
     ctrl: NonNull<u8>,  // ctrl byte的数组
         // ctrl指针，就是buckets部分的结束指针。这样就省了一个word去保存buckets指针
@@ -516,7 +516,7 @@ impl<T, A: Allocator + Clone> RawTable<T, A> {
     }
 
     /// Returns the index of a bucket from a `Bucket`.
-    #[inline]
+    #[inline]  //根据slot对象，确定在slots数组中的下标
     pub unsafe fn bucket_index(&self, bucket: &Bucket<T>) -> usize {
         bucket.to_base_index(self.data_end())
     }
@@ -532,9 +532,9 @@ impl<T, A: Allocator + Clone> RawTable<T, A> {
     /// Erases an element from the table without dropping it.
     #[cfg_attr(feature = "inline-more", inline)]
     #[deprecated(since = "0.8.1", note = "use erase or remove instead")]
-    pub unsafe fn erase_no_drop(&mut self, item: &Bucket<T>) {
-        let index = self.bucket_index(item);
-        self.table.erase(index);
+    pub unsafe fn erase_no_drop(&mut self, item: &Bucket<T>) {  //找到以后执行删除
+        let index = self.bucket_index(item);  //根据slot确定下标
+        self.table.erase(index);  //根据下标进行删除
     }
 
     /// Erases an element from the table, dropping it in place.
@@ -567,12 +567,12 @@ impl<T, A: Allocator + Clone> RawTable<T, A> {
     #[cfg_attr(feature = "inline-more", inline)]
     #[allow(clippy::needless_pass_by_value)]
     #[allow(deprecated)]
-    pub unsafe fn remove(&mut self, item: Bucket<T>) -> T {
+    pub unsafe fn remove(&mut self, item: Bucket<T>) -> T {  //查找到以后，执行删除
         self.erase_no_drop(&item);
         item.read()
     }
 
-    /// Finds and removes an element from the table, returning it.
+    /// Finds and removes an element from the table, returning it.  //执行删除操作
     #[cfg_attr(feature = "inline-more", inline)]
     pub fn remove_entry(&mut self, hash: u64, eq: impl FnMut(&T) -> bool) -> Option<T> {
         // Avoid `Option::map` because it bloats LLVM IR.
@@ -590,7 +590,7 @@ impl<T, A: Allocator + Clone> RawTable<T, A> {
 
     /// Removes all elements from the table without freeing the backing memory.
     #[cfg_attr(feature = "inline-more", inline)]
-    pub fn clear(&mut self) {
+    pub fn clear(&mut self) {  //清空hash的内容
         // Ensure that the table is reset even if one of the drops panic
         let mut self_ = guard(self, |self_| self_.clear_no_drop());
         unsafe {
@@ -607,13 +607,13 @@ impl<T, A: Allocator + Clone> RawTable<T, A> {
     }
 
     /// Shrinks the table to fit `max(self.len(), min_size)` elements.
-    #[cfg_attr(feature = "inline-more", inline)]
+    #[cfg_attr(feature = "inline-more", inline)]  //缩容的过程
     pub fn shrink_to(&mut self, min_size: usize, hasher: impl Fn(&T) -> u64) {
         // Calculate the minimal number of elements that we need to reserve
         // space for.
         let min_size = usize::max(self.table.items, min_size);
         if min_size == 0 {
-            *self = Self::new_in(self.table.alloc.clone());
+            *self = Self::new_in(self.table.alloc.clone());  //如果hashmap是空的，重新分配就好了
             return;
         }
 
@@ -627,7 +627,7 @@ impl<T, A: Allocator + Clone> RawTable<T, A> {
         };
 
         // If we have more buckets than we need, shrink the table.
-        if min_buckets < self.buckets() {
+        if min_buckets < self.buckets() {  //如果是缩容，就执行。扩容则不管
             // Fast path if the table is empty
             if self.table.items == 0 {
                 *self = Self::with_capacity_in(min_size, self.table.alloc.clone());
@@ -940,7 +940,7 @@ impl<T, A: Allocator + Clone> RawTable<T, A> {
     /// struct, we have to make the `iter` method unsafe.
     #[inline]
     pub unsafe fn iter(&self) -> RawIter<T> {
-        let data = Bucket::from_base_index(self.data_end(), 0);
+        let data = Bucket::from_base_index(self.data_end(), 0);  //??? 这个下标没看懂。是指向buckets的最后一个吗?
         RawIter {
             iter: RawIterRange::new(self.table.ctrl.as_ptr(), data, self.table.buckets()),
             items: self.table.items,
@@ -1331,7 +1331,7 @@ impl<A: Allocator + Clone> RawTableInner<A> {
     }
 
     #[inline]
-    fn buckets(&self) -> usize {
+    fn buckets(&self) -> usize {  //buckets数组的长度
         self.bucket_mask + 1
     }
 
@@ -1422,7 +1422,7 @@ impl<A: Allocator + Clone> RawTableInner<A> {
     /// code generated, but it is eliminated by LLVM optimizations when inlined.
     #[allow(clippy::inline_always)]
     #[inline(always)]
-    unsafe fn resize_inner(
+    unsafe fn resize_inner(  //缩容，新分配一个hash表，然后把元素拷贝过去。
         &mut self,
         capacity: usize,
         hasher: &dyn Fn(&mut Self, usize) -> u64,
@@ -1577,11 +1577,11 @@ impl<A: Allocator + Clone> RawTableInner<A> {
     }
 
     #[inline]
-    unsafe fn erase(&mut self, index: usize) {
+    unsafe fn erase(&mut self, index: usize) {  //根据下标进行删除
         debug_assert!(is_full(*self.ctrl(index)));
-        let index_before = index.wrapping_sub(Group::WIDTH) & self.bucket_mask;
-        let empty_before = Group::load(self.ctrl(index_before)).match_empty();
-        let empty_after = Group::load(self.ctrl(index)).match_empty();
+        let index_before = index.wrapping_sub(Group::WIDTH) & self.bucket_mask;  //前一个group
+        let empty_before = Group::load(self.ctrl(index_before)).match_empty();  //是否全部为空
+        let empty_after = Group::load(self.ctrl(index)).match_empty(); //当前位置是否全部为空
 
         // If we are inside a continuous block of Group::WIDTH full or deleted
         // cells then a probe window may have seen a full block when trying to
@@ -1590,15 +1590,15 @@ impl<A: Allocator + Clone> RawTableInner<A> {
         //
         // Note that in this context `leading_zeros` refers to the bytes at the
         // end of a group, while `trailing_zeros` refers to the bytes at the
-        // beginning of a group.
+        // beginning of a group.    //前一个group和后一个group的间隔超过了16
         let ctrl = if empty_before.leading_zeros() + empty_after.trailing_zeros() >= Group::WIDTH {
-            DELETED
+            DELETED  //空得大，就是删除标志
         } else {
-            self.growth_left += 1;
-            EMPTY
+            self.growth_left += 1;  //!!!这里值得认真读：
+            EMPTY  //空得小，就是空标志(与直觉相悖)
         };
-        self.set_ctrl(index, ctrl);
-        self.items -= 1;
+        self.set_ctrl(index, ctrl);  //写标志位
+        self.items -= 1;  //存在的总数减一
     }
 }
 
@@ -1835,17 +1835,17 @@ impl<T, A: Allocator + Clone> IntoIterator for RawTable<T, A> {
 pub(crate) struct RawIterRange<T> {
     // Mask of full buckets in the current group. Bits are cleared from this
     // mask as each element is processed.
-    current_group: BitMask,
+    current_group: BitMask,  //当前组的16bit的使用情况，第一次指向第0个group
 
     // Pointer to the buckets for the current group.
-    data: Bucket<T>,
+    data: Bucket<T>,  //当前slot的对象，指向数组的最后一个. ??? 没看懂
 
     // Pointer to the next group of control bytes,
     // Must be aligned to the group size.
-    next_ctrl: *const u8,
+    next_ctrl: *const u8,  //指向第1个Group
 
     // Pointer one past the last control byte of this range.
-    end: *const u8,
+    end: *const u8,  //ctrl byte数组的结束位置
 }
 
 impl<T> RawIterRange<T> {
@@ -1859,8 +1859,8 @@ impl<T> RawIterRange<T> {
         let end = ctrl.add(len);
 
         // Load the first group and advance ctrl to point to the next group
-        let current_group = Group::load_aligned(ctrl).match_full();
-        let next_ctrl = ctrl.add(Group::WIDTH);
+        let current_group = Group::load_aligned(ctrl).match_full();  //第0个group
+        let next_ctrl = ctrl.add(Group::WIDTH);  //第1个group
 
         Self {
             current_group,
@@ -1938,13 +1938,13 @@ impl<T> Iterator for RawIterRange<T> {
     #[cfg_attr(feature = "inline-more", inline)]
     fn next(&mut self) -> Option<Bucket<T>> {
         unsafe {
-            loop {
+            loop {  //先找第一个不为0的bit
                 if let Some(index) = self.current_group.lowest_set_bit() {
-                    self.current_group = self.current_group.remove_lowest_bit();
-                    return Some(self.data.next_n(index));
+                    self.current_group = self.current_group.remove_lowest_bit();  //这一位置0
+                    return Some(self.data.next_n(index));  //偏移到对应的bucket
                 }
 
-                if self.next_ctrl >= self.end {
+                if self.next_ctrl >= self.end {  //遍历完成
                     return None;
                 }
 
@@ -1954,7 +1954,7 @@ impl<T> Iterator for RawIterRange<T> {
                 // EMPTY. On larger tables self.end is guaranteed to be aligned
                 // to the group size (since tables are power-of-two sized).
                 self.current_group = Group::load_aligned(self.next_ctrl).match_full();
-                self.data = self.data.next_n(Group::WIDTH);
+                self.data = self.data.next_n(Group::WIDTH);  //偏移16个
                 self.next_ctrl = self.next_ctrl.add(Group::WIDTH);
             }
         }
@@ -1986,7 +1986,7 @@ impl<T> FusedIterator for RawIterRange<T> {}
 ///   change in the future.
 pub struct RawIter<T> {
     pub(crate) iter: RawIterRange<T>,
-    items: usize,
+    items: usize,  //hash中的元素个数
 }
 
 impl<T> RawIter<T> {

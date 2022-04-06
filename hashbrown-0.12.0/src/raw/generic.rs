@@ -1,6 +1,6 @@
 use super::bitmask::BitMask;
 use super::EMPTY;
-use core::{mem, ptr};
+use core::{mem, ptr};  //这个文件猜测是为了支持不支持SIMD的CPU
 
 // Use the native word size as the group size. Using a 64-bit group size on
 // a 32-bit architecture will just end up being more expensive because

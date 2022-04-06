@@ -14,7 +14,7 @@ use core::intrinsics;
 /// performed on counts/indices to normalize this difference. `BITMASK_MASK` is
 /// similarly a mask of all the actually-used bits.
 #[derive(Copy, Clone)]
-pub struct BitMask(pub BitMaskWord);
+pub struct BitMask(pub BitMaskWord);  //封装对16位的group处理结果的各种操作
 
 #[allow(clippy::use_self)]
 impl BitMask {
@@ -41,7 +41,7 @@ impl BitMask {
 
     /// Returns a new `BitMask` with the lowest bit removed.
     #[inline]
-    #[must_use]
+    #[must_use]  //把最前的为1的bit置为0
     pub fn remove_lowest_bit(self) -> Self {
         BitMask(self.0 & (self.0 - 1))
     }
@@ -64,7 +64,7 @@ impl BitMask {
     /// Returns the first set bit in the `BitMask`, if there is one. The
     /// bitmask must not be empty.
     #[inline]
-    #[cfg(feature = "nightly")]
+    #[cfg(feature = "nightly")]  //找到第一个不为0的bit
     pub unsafe fn lowest_set_bit_nonzero(self) -> usize {
         intrinsics::cttz_nonzero(self.0) as usize / BITMASK_STRIDE
     }

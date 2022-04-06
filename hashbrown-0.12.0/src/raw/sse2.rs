@@ -30,7 +30,7 @@ impl Group {
     /// This is guaranteed to be aligned to the group size.
     #[inline]
     #[allow(clippy::items_after_statements)]
-    pub const fn static_empty() -> &'static [u8; Group::WIDTH] {
+    pub const fn static_empty() -> &'static [u8; Group::WIDTH] { //??? 看不懂
         #[repr(C)]
         struct AlignedBytes {
             _align: [Group; 0],
@@ -54,7 +54,7 @@ impl Group {
     /// aligned to `mem::align_of::<Group>()`.
     #[inline]
     #[allow(clippy::cast_ptr_alignment)]
-    pub unsafe fn load_aligned(ptr: *const u8) -> Self {
+    pub unsafe fn load_aligned(ptr: *const u8) -> Self {  //rehash的时候使用，对齐的方式加载，应该性能更好
         // FIXME: use align_offset once it stabilizes
         debug_assert_eq!(ptr as usize & (mem::align_of::<Self>() - 1), 0);
         Group(x86::_mm_load_si128(ptr.cast()))
@@ -64,7 +64,7 @@ impl Group {
     /// aligned to `mem::align_of::<Group>()`.
     #[inline]
     #[allow(clippy::cast_ptr_alignment)]
-    pub unsafe fn store_aligned(self, ptr: *mut u8) {
+    pub unsafe fn store_aligned(self, ptr: *mut u8) {  //rehash的时候写回内存
         // FIXME: use align_offset once it stabilizes
         debug_assert_eq!(ptr as usize & (mem::align_of::<Self>() - 1), 0);
         x86::_mm_store_si128(ptr.cast(), self.0);
@@ -73,7 +73,7 @@ impl Group {
     /// Returns a `BitMask` indicating all bytes in the group which have
     /// the given value.
     #[inline]
-    pub fn match_byte(self, byte: u8) -> BitMask {
+    pub fn match_byte(self, byte: u8) -> BitMask {  //一次性匹配16字节，返回16个位
         #[allow(
             clippy::cast_possible_wrap, // byte: u8 as i8
             // byte: i32 as u16
@@ -122,7 +122,7 @@ impl Group {
     /// - `EMPTY => EMPTY`
     /// - `DELETED => EMPTY`
     /// - `FULL => DELETED`  //在不扩容状态下REHASH的时候，做这种操作
-    #[inline]
+    #[inline]  //rehash的时候，没用的地方变成EXMPTY，有占用的地方变成DELETED
     pub fn convert_special_to_empty_and_full_to_deleted(self) -> Self {
         // Map high_bit = 1 (EMPTY or DELETED) to 1111_1111
         // and high_bit = 0 (FULL) to 1000_0000
