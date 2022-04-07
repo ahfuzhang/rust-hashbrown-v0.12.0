@@ -1503,7 +1503,7 @@ where
     pub fn insert(&mut self, k: K, v: V) -> Option<V> {
         let hash = make_insert_hash::<K, S>(&self.hash_builder, &k);
         if let Some((_, item)) = self.table.get_mut(hash, equivalent_key(&k)) {
-            Some(mem::replace(item, v))
+            Some(mem::replace(item, v))  //找到就替换
         } else {
             self.table
                 .insert(hash, (k, v), make_hasher::<K, _, V, S>(&self.hash_builder));

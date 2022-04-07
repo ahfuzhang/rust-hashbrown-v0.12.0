@@ -6,7 +6,7 @@ mod inner {
     pub use crate::alloc::alloc::{Allocator, Global};
     use core::ptr::NonNull;
 
-    #[allow(clippy::map_err_ignore)]
+    #[allow(clippy::map_err_ignore)]  //执行分配函数
     pub fn do_alloc<A: Allocator>(alloc: &A, layout: Layout) -> Result<NonNull<u8>, ()> {
         alloc
             .allocate(layout)
