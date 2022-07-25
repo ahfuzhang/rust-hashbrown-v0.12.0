@@ -637,8 +637,8 @@ impl<T, A: Allocator + Clone> RawTable<T, A> {
                     .resize(min_size, hasher, Fallibility::Infallible)
                     .is_err()
                 {
-                    unsafe { hint::unreachable_unchecked() }
-                }
+                    unsafe { hint::unreachable_unchecked() }  //意思是rehash一定不会失败
+                }//Informs the compiler that this point in the code is not reachable, enabling further optimizations.
             }
         }
     }
@@ -653,7 +653,7 @@ impl<T, A: Allocator + Clone> RawTable<T, A> {
                 .reserve_rehash(additional, hasher, Fallibility::Infallible)
                 .is_err()
             {
-                unsafe { hint::unreachable_unchecked() }
+                unsafe { hint::unreachable_unchecked() }  //这个啥意思?
             }
         }
     }
@@ -726,11 +726,11 @@ impl<T, A: Allocator + Clone> RawTable<T, A> {
             // We can avoid growing the table once we have reached our load
             // factor if we are replacing a tombstone. This works since the
             // number of EMPTY slots does not change in this case.
-            let old_ctrl = *self.table.ctrl(index);   //??? special_is_empty 这个完全看不懂
+            let old_ctrl = *self.table.ctrl(index);   //special_is_empty 已经知道是EMPTY或者DELETED的时候，确定是不是EMPTY
             if unlikely(self.table.growth_left == 0 && special_is_empty(old_ctrl)) {  //如果达到了该扩容的情况，先扩容
                 self.reserve(1, hasher);  //执行预留操作
                 index = self.table.find_insert_slot(hash);
-            }  //如果没有空间了，但是当前又是EMPTY的标志，那就再硬撑一次。等到下次再rehash
+            }  //如果没有空间了，但是当前又是EMPTY的标志，那就rehash
 
             self.table.record_item_insert_at(index, old_ctrl, hash);
 
@@ -1147,7 +1147,7 @@ impl<A: Allocator + Clone> RawTableInner<A> {
                               //??? 为什么不把最后一个用于防止溢出的Group设置为FULL
                     // In tables smaller than the group width, trailing control  //桶的个数小于16时，触发下面的判断
                     // bytes outside the range of the table are filled with
-                    // EMPTY entries. These will unfortunately trigger a
+                    // EMPTY entries. These will unfortunately trigger a   //当probe_seq.pos + bit超过bucket数量的时候，result回绕到了头部
                     // match, but once masked may point to a full bucket that
                     // is already occupied. We detect this situation here and
                     // perform a second scan starting at the beginning of the
@@ -1160,7 +1160,7 @@ impl<A: Allocator + Clone> RawTableInner<A> {
                         return Group::load_aligned(self.ctrl(0))
                             .match_empty_or_deleted()
                             .lowest_set_bit_nonzero();
-                    }  //bug: 回绕的时候，不应该简单的返回
+                    }  //bug: 回绕的时候，不应该简单的返回  //作者又说这不是bug
 
                     return result;
                 }
@@ -1209,7 +1209,7 @@ impl<A: Allocator + Clone> RawTableInner<A> {
 
         // Fix up the trailing control bytes. See the comments in set_ctrl
         // for the handling of tables smaller than the group width.
-        if self.buckets() < Group::WIDTH {
+        if self.buckets() < Group::WIDTH {  //复制到溢出区
             self.ctrl(0)
                 .copy_to(self.ctrl(Group::WIDTH), self.buckets());
         } else {
@@ -1322,7 +1322,7 @@ impl<A: Allocator + Clone> RawTableInner<A> {
         *self.ctrl(index) = ctrl;  //对应下标，写入hashcode的高7位
         *self.ctrl(index2) = ctrl;  //一般情况下, index和index2相等
     }  //如果index<16，则index2出现在ctrl byte数组的末位
-         //难道是为了处理桶长度小于16的情况??
+       //   (2 - 16)& (2**10-1) + 16 = 1026，当index小于16的时候，复制到数组的末位填充区
     /// Returns a pointer to a control byte.
     #[inline]
     unsafe fn ctrl(&self, index: usize) -> *mut u8 {

@@ -109,7 +109,7 @@ impl Group {
         unsafe {
             // A byte is EMPTY or DELETED iff the high bit is set
             BitMask(x86::_mm_movemask_epi8(self.0) as u16)
-        }
+        }  //_mm_movemask_epi8 把16个字节的最高位，填充到16bit中
     }
 
     /// Returns a `BitMask` indicating all bytes in the group which are full.
