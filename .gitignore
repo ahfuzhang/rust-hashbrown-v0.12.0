@@ -10,3 +10,6 @@ test.out
 *.exe
 bin/
 *.zip
+target/*
+debug/
+release/
